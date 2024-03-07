@@ -1,4 +1,5 @@
 import {MongoClient} from 'mongodb';
+
 let connection_string = 
     'mongodb+srv://admin:admin@atlascluster.m5jen8k.mongodb.net/?retryWrites=true&w=majority&appName=AtlasCluster';
 
