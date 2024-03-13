@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import storage from "./memory_storage.js";
-import connect from "./BEdb.js";
+import connect from "./db.js";
 //import * as res from 'express/lib/response';
 
 const app= express(); //instanciranje aplikacije
@@ -17,6 +17,19 @@ connect()
       .catch((err) => {
         console.error("Došlo je do greške prilikom spajanja na bazu!");
       });
+
+app.use(function (req, res, next) {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+      "Access-Control-Allow-Methods",
+      "GET,HEAD,OPTIONS,POST,PUT,DELETE"
+  );
+  res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content Type, Accept, Authorization"
+  );
+  next();
+});
 
 app.post('/posts', async (req, res) =>{
   try{
@@ -36,17 +49,33 @@ app.post('/posts', async (req, res) =>{
 });
 
 app.get('/posts', async (req, res) => {
+
+  let db = await connect();
+
+  let results;
   try {
-    let db = await connect()
-    let cursor = await db.collection("posts").find().sort({postedAt: -1});
-    let results = await cursor.toArray();
-    console.log(results)
-    res.json(results)
-  } catch (err) {
-    console.error("Greska pri dohvacanju postova: ", err);
-    res.status(500).json({error: "Server error"});
+    let cursor = await db.collection("posts").find();
+    results = await cursor.toArray();
+  } catch (e) {
+    console.log(e);
   }
+  res.json(results);
 })
+
+app.get("/GetPosts", async (req, res) => {
+  let db = await connect();
+
+  let results;
+
+  try {
+    let cursor = await db.collection("Groups").find({});
+
+    results = await cursor.toArray();
+  } catch (e) {
+    console.log(e);
+  }
+  res.json(results);
+});
 
 app.get('/posts_memory', (req, res) => {
   let posts = storage.posts;
