@@ -78,31 +78,6 @@ app.get("/GetPosts", async (req, res) => {
   res.json(results);
 });
 
-app.get("/posts_memory", (req, res) => {
-  let posts = storage.posts;
-  let query = req.query;
-
-  if (query.title) {
-    posts = posts.filter((e) => e.title.indexOf(query.title) >= 0);
-  }
-
-  if (query.createdBy) {
-    posts = posts.filter((e) => e.createdBy.indexOf(query.createdBy) >= 0);
-  }
-
-  if (query._any) {
-    let terms = query._any.split(" ");
-    posts = posts.filter((doc) => {
-      let info = doc.title + " " + doc.createdBy;
-      return terms.every((term) => info.indexOf(term) >= 0);
-    });
-  }
-
-  //sortiranja
-  posts.sort((a, b) => b.postedAt - a.postedAt);
-  res.json(posts);
-});
-
 app.get("/posts/:id", async (req, res) => {
   const { id } = req.params;
   const db = await connect();
