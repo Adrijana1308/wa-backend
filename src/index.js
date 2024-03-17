@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import storage from "./memory_storage.js";
 import connect from "./db.js";
+import mongo from "mongodb";
+
 //import * as res from 'express/lib/response';
 
 const app = express(); //instanciranje aplikacije
@@ -104,7 +106,9 @@ app.get("/posts_memory", (req, res) => {
 app.get("/posts/:id", async (req, res) => {
   const { id } = req.params;
   const db = await connect();
-  const post = await db.collection("posts").findOne({ _id: id });
+  const post = await db
+    .collection("posts")
+    .findOne({ _id: mongo.ObjectId(id) });
   console.log("Post: " + post);
   res.json(post);
 });
