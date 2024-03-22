@@ -2,9 +2,13 @@ import {MongoClient} from 'mongodb';
 //import {Service, Posts} from '.serviceIndex';
 
 let connection_string = 
-    'mongodb+srv://admin:admin@atlascluster.m5jen8k.mongodb.net/?retryWrites=true&w=majority&appName=AtlasCluster';
+    //'mongodb+srv://admin:admin@atlascluster.m5jen8k.mongodb.net/?retryWrites=true&w=majority&appName=AtlasCluster';
+    'mongodb+srv://admin:admin@atlascluster.m5jen8k.mongodb.net/LocksifyDB?retryWrites=true&w=majority';
 
-let client = new MongoClient(connection_string);
+let client = new MongoClient(connection_string, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
 
 let db = null
 

@@ -33,22 +33,121 @@ app.use(function (req, res, next) {
   next();
 });
 
+function isValidTimeFormat(time){
+  const regex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  return regex.test(time);
+} 
+
+
 app.post("/posts", async (req, res) => {
   try {
+    //Validiraj dolazne podatke
+    const {name, location, open, close, source} = req.body;
+    const {date, time} = req.body.availability || {};
+    const rating = req.body.rating || null; // Default 0
+    const hairType = ["short", "medium", "long", "other"];
+    //Provjera dodavanja tipova frizura i cijena na postu
+    if(hairstyles){
+      for(const type of hairType) {
+        if(hairstyles[type]){
+          //Provjeri dali je tip ispravno formatiran
+          if(!Array.isArray(hairstyles[type]) || hairstyles[type].some(hairstyle => !hairstyle.type || !hairstyle.price || !hairstyle.duration)){
+            return res.status(400).json({error: `Invalid '${type}' hairstyle format`});
+          }
+        }
+      }
+    }
+
+    const defaultHairstyles = { //Opcionalne defaultne vrijenosti kose
+      short: [],
+      medium: [],
+      long: [],
+      other: []
+    } 
+    const hairstyles = req.body.hairstyles || defaultHairstyles; //Ako nema hairstyles, postavi defaultne vrijednosti
+    const mergedHairstyles = {...defaultHairstyles, ...hairstyles}; //Spoji defaultne vrijednosti i dodane vrijednosti
+  //  const selectedDate = date; //Neznam za sad dali mi to treba
+  //  const selectedTime = time; //Neznam za sad dali mi to treba
+
+
+    // const isAvailable = await checkAvailability(date, time)
+    // //Provjera slobodnog termina na kalendaru!! Povezi sa kalendarom
+    // if(!isAvailable){
+    //   return res.status(400).json({error: "Termin je zauzet!"}); //400 Bad Request
+    // }
+
+
+    //Provjera obaveznih podataka
+    if (!name || !location || !open || !close || !source) {
+      return res.status(400).json({ error: "Missing required fields" }); //400 Bad Request
+    }
+    //Provjera formata za vrijeme 24H
+    if(!isValidTimeFormat(open) || !isValidTimeFormat(close)){
+      return res.status(400).json({error: "Upisano krivo vrijeme! "});
+    }
+
+
     let db = await connect();
-    let data = req.body; //podaci koji su poslani kroz HTTP zahtjev
-    let result = await db.collection("posts").insertOne(data);
+    let result = await db.collection("posts").insertOne({
+      name,
+      location,
+      date,
+      source,
+      open,
+      close,
+      time,
+      hairstyles: mergedHairstyles || {}, // Ako nema onda je default
+      rating,
+      numOfRatings: 0, // Default 0
+      availability: req.body.availability || {}, // Ako nema onda je default
+    });
+
+
     res.json(result.ops[0]);
   } catch (err) {
     console.error("Greska pri umetanju posta: ", err);
     res.status(500).json({ error: "Server error" });
+    return;
   }
-  //dodaj u našu bazu (lista u memoriji)
-  storage.posts.push(data);
-
-  //vrati ono što je spremljeno
-  res.json(data); //vrati odgovor klijentu tj. podatke za referencu
 });
+
+// Async funtion to check if the selected date and time are available
+async function checkAvailability(selectedDate, selectedTime){
+  try {
+    const existingAppointments = await db.collection("appointments").find({
+      date: selectedDate,
+      time: selectedTime
+    }).toArray();
+    return existingAppointments.length === 0;
+  } catch (error) {
+    console.error("Error checking availability: ", error);
+    throw error;
+  }
+}
+
+
+
+
+// Endpoint for updating salon details
+app.put("/posts/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedData = req.body;
+    
+    let db = await connect();
+    let result = await db.collection("posts").updateOne(
+      { _id: mongo.ObjectId(id) },
+      { $set: updatedData }
+    );
+
+    res.json({ success: true, message: "Salon details updated successfully" });
+  } catch (err) {
+    console.error("Error updating post: ", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 
 app.get("/posts", async (req, res) => {
   let db = await connect();
@@ -69,38 +168,13 @@ app.get("/GetPosts", async (req, res) => {
   let results;
 
   try {
-    let cursor = await db.collection("Groups").find({});
+    let cursor = await db.collection("posts").find({});
 
     results = await cursor.toArray();
   } catch (e) {
     console.log(e);
   }
   res.json(results);
-});
-
-app.get("/posts_memory", (req, res) => {
-  let posts = storage.posts;
-  let query = req.query;
-
-  if (query.title) {
-    posts = posts.filter((e) => e.title.indexOf(query.title) >= 0);
-  }
-
-  if (query.createdBy) {
-    posts = posts.filter((e) => e.createdBy.indexOf(query.createdBy) >= 0);
-  }
-
-  if (query._any) {
-    let terms = query._any.split(" ");
-    posts = posts.filter((doc) => {
-      let info = doc.title + " " + doc.createdBy;
-      return terms.every((term) => info.indexOf(term) >= 0);
-    });
-  }
-
-  //sortiranja
-  posts.sort((a, b) => b.postedAt - a.postedAt);
-  res.json(posts);
 });
 
 app.get("/posts/:id", async (req, res) => {
