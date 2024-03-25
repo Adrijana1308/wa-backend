@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
-import storage from "./memory_storage.js";
 import connect from "./db.js";
 import mongo from "mongodb";
+import auth from "./auth.js";
 
 //import * as res from 'express/lib/response';
 
@@ -37,6 +37,26 @@ function isValidTimeFormat(time){
   const regex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   return regex.test(time);
 } 
+
+app.post("/users", async (req, res) => {
+
+    let user = req.body;
+
+    auth.registerUser(user);
+
+    res.json(user);
+
+  // try {
+  //   const {name, email, password} = req.body;
+  //   if (!name || !email || !password) {
+  //     return res.status(400).json({ error: "Missing required fields" });
+  //   }
+  //   const user = await storage.createUser(name, email, password);
+  //   res.status(201).json(user);
+  // } catch (err) {
+  //   res.status(500).json({ error: err.message });
+  // }
+})
 
 
 app.post("/posts", async (req, res) => {
