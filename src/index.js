@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config(); // učitava .env datoteku u process.env
+
 import express from "express";
 import cors from "cors";
 import connect from "./db.js";
@@ -38,27 +41,43 @@ function isValidTimeFormat(time){
   return regex.test(time);
 } 
 
-app.post("/users", async (req, res) => {
-
-    let user = req.body;
-
-    auth.registerUser(user);
-
-    res.json(user);
-
-  // try {
-  //   const {name, email, password} = req.body;
-  //   if (!name || !email || !password) {
-  //     return res.status(400).json({ error: "Missing required fields" });
-  //   }
-  //   const user = await storage.createUser(name, email, password);
-  //   res.status(201).json(user);
-  // } catch (err) {
-  //   res.status(500).json({ error: err.message });
-  // }
+// Ovo je test, to se ne koristi u stvarnosti....
+app.get("/tajna", [auth.verify], (req, res) => {
+  res.json({message: "ovo je tajna " + req.jwt.username});
 })
 
+app.post("/auth", async (req, res) => {
+  let user = req.body;
+  let result;
+  try{
+    result = await auth.authenticateUser(user.username, user.password);
+    res.json(result);
+  } catch (error){
+    console.error(error);
+    console.log(process.env.JWT_SECRET)
+    res.status(403).json({error: error.message});
+  }
+});
 
+// Endpoint for user Registration
+app.post("/register", async (req, res) => {
+
+    let user = req.body;
+    let id;
+    try{
+      id = await auth.registerUser(user);
+      res.json({ id: id });
+    } catch (error){
+      console.error(error);
+      if(error.message === 'Username already exists'){
+        res.status(400).json({error: error.message});
+      } else{
+        res.status(500).json({error: 'Server error!'});
+      }
+    }
+});
+
+// Endpoint for Salon posts / upload
 app.post("/posts", async (req, res) => {
   try {
     //Validiraj dolazne podatke
@@ -145,9 +164,6 @@ async function checkAvailability(selectedDate, selectedTime){
   }
 }
 
-
-
-
 // Endpoint for updating salon details
 app.put("/posts/:id", async (req, res) => {
   try {
@@ -167,11 +183,9 @@ app.put("/posts/:id", async (req, res) => {
   }
 });
 
-
-
+// Endpoint for Salon posts / download
 app.get("/posts", async (req, res) => {
   let db = await connect();
-
   let results;
   try {
     let cursor = await db.collection("posts").find();
@@ -182,21 +196,7 @@ app.get("/posts", async (req, res) => {
   res.json(results);
 });
 
-app.get("/GetPosts", async (req, res) => {
-  let db = await connect();
-
-  let results;
-
-  try {
-    let cursor = await db.collection("posts").find({});
-
-    results = await cursor.toArray();
-  } catch (e) {
-    console.log(e);
-  }
-  res.json(results);
-});
-
+// Enpoint for specific Salon post / donwload
 app.get("/posts/:id", async (req, res) => {
   const { id } = req.params;
   const db = await connect();
@@ -206,5 +206,32 @@ app.get("/posts/:id", async (req, res) => {
   console.log("Post: " + post);
   res.json(post);
 });
+
+// Endpoint for deleting specific Salon post
+app.delete("/posts/:id", async (req, res) => {
+  const { id } = req.params;
+  const db = await connect();
+  const result = await db
+    .collection("posts")
+    .deleteOne({ _id: mongo.ObjectId(id) });
+  res.json({ success: true, message: "Post deleted successfully" });
+});
+
+//Enpoint for making bookings
+app.post("/appointments", async (req, res) => {
+  try {
+    const { date, time, salonId } = req.body;
+    const db = await connect();
+    const result = await db.collection("appointments").insertOne({
+      date,
+      time,
+      salonId,
+    });
+    res.json(result.ops[0]);
+  } catch (err) {
+    console.error("Error making appointment: ", err);
+    res.status(500).json({ error: "Server error" });
+  }
+})
 
 app.listen(port, () => console.log(`Slušam na portu ${port}!`));
