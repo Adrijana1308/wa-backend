@@ -45,11 +45,10 @@ export default {
 
         if(user && user.password && (await bcrypt.compare (password, user.password))){
             delete user.password;
-            console.log(process.env.JWT_SECRET);
             let token = jwt.sign( user, process.env.JWT_SECRET, {
                 algorithm : "HS512",
                 expiresIn: "1 week"
-            }); //ovako treba izgledati param signa --- process.env.JWT_SECRET, {}
+            }); 
             return{
                 token,
                 username: user.username,

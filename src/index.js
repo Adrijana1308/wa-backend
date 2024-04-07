@@ -54,7 +54,6 @@ app.post("/auth", async (req, res) => {
     res.json(result);
   } catch (error){
     console.error(error);
-    console.log(process.env.JWT_SECRET)
     res.status(403).json({error: error.message});
   }
 });
