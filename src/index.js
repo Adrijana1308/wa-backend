@@ -80,12 +80,23 @@ app.post("/register", async (req, res) => {
 app.post("/posts", async (req, res) => {
   try {
     //Validiraj dolazne podatke
-    const {name, location, open, close, source} = req.body;
+    const {name, location, open, close, source, hairstyles: incomingHairstyles} = req.body;
     const {date, time} = req.body.availability || {};
     const rating = req.body.rating || null; // Default 0
     const hairType = ["short", "medium", "long", "other"];
+
+    const defaultHairstyles = { //Opcionalne defaultne vrijenosti kose
+      short: [],
+      medium: [],
+      long: [],
+      other: []
+    }; 
+
+    const hairstyles = incomingHairstyles || defaultHairstyles; //Ako nema hairstyles, postavi defaultne vrijednosti
+
+
     //Provjera dodavanja tipova frizura i cijena na postu
-    if(hairstyles){
+    //if(hairstyles){
       for(const type of hairType) {
         if(hairstyles[type]){
           //Provjeri dali je tip ispravno formatiran
@@ -94,15 +105,9 @@ app.post("/posts", async (req, res) => {
           }
         }
       }
-    }
+    //}
 
-    const defaultHairstyles = { //Opcionalne defaultne vrijenosti kose
-      short: [],
-      medium: [],
-      long: [],
-      other: []
-    } 
-    const hairstyles = req.body.hairstyles || defaultHairstyles; //Ako nema hairstyles, postavi defaultne vrijednosti
+
     const mergedHairstyles = {...defaultHairstyles, ...hairstyles}; //Spoji defaultne vrijednosti i dodane vrijednosti
   //  const selectedDate = date; //Neznam za sad dali mi to treba
   //  const selectedTime = time; //Neznam za sad dali mi to treba
@@ -138,6 +143,7 @@ app.post("/posts", async (req, res) => {
       rating,
       numOfRatings: 0, // Default 0
       availability: req.body.availability || {}, // Ako nema onda je default
+      appointments: [], // Ako nema onda je default
     });
 
 
@@ -217,14 +223,14 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 //Enpoint for making bookings
-app.post("/appointments", async (req, res) => {
+app.post("/bookings", async (req, res) => {
   try {
-    const { date, time, salonId } = req.body;
+    const { date, time, salon_id } = req.body;
     const db = await connect();
-    const result = await db.collection("appointments").insertOne({
+    const result = await db.collection("posts").insertOne({
       date,
       time,
-      salonId,
+      salon_id,
     });
     res.json(result.ops[0]);
   } catch (err) {
