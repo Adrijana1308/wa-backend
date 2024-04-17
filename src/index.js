@@ -140,7 +140,7 @@ app.post("/posts", async (req, res) => {
       close,
       time,
       hairstyles: mergedHairstyles || {}, // Ako nema onda je default
-      rating,
+      rating: 0,
       numOfRatings: 0, // Default 0
       availability: req.body.availability || {}, // Ako nema onda je default
       appointments: [], // Ako nema onda je default
@@ -189,7 +189,7 @@ app.put("/posts/:id", async (req, res) => {
 });
 
 // Endpoint for Salon posts / download
-app.get("/posts", async (req, res) => {
+app.get("/posts",  async (req, res) => {
   let db = await connect();
   let results;
   try {
@@ -238,5 +238,22 @@ app.post("/bookings", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 })
+
+// app.post("/appointments", async (req, res) => {
+//   try {
+//     const { date, time, salon_id } = req.body;
+//     const db = await connect();
+//     const result = await db.collection("posts.appointments").updateOne({
+//       "salon_id":salon_id,
+//       "date":date,
+//       "time":time,
+
+//     });
+//     res.json(result.ops[0]);
+//   } catch (err) {
+//     console.error("Error making appointment: ", err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// })
 
 app.listen(port, () => console.log(`Slušam na portu ${port}!`));
