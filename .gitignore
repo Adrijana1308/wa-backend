@@ -2,5 +2,5 @@
 .env
 
 # Ignore other files
-/node_modules
+node_modules
 /dist
