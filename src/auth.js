@@ -22,6 +22,7 @@ export default {
         let doc = {
             username: userData.username,
             password: await bcrypt.hash(userData.password, 10),
+            userType: userData.userType, // Add usertype to the schema
             grad: userData.grad,
         };
         try {
@@ -52,6 +53,8 @@ export default {
             return{
                 token,
                 username: user.username,
+                userType: user.userType,
+                grad: user.grad
             };
         }
         else {
