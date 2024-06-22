@@ -6,6 +6,7 @@ import cors from "cors";
 import connect from "./db.js";
 import mongo from "mongodb";
 import auth from "./auth.js";
+import { ObjectId } from "mongodb";
 
 //import * as res from 'express/lib/response';
 
@@ -170,16 +171,36 @@ async function checkAvailability(selectedDate, selectedTime){
 }
 
 // Endpoint for updating salon details
-app.put("/posts/:id", async (req, res) => {
+app.put("/posts/:id", auth.verify, async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedData = req.body;
+    const {userId} = req.jwt;
     
+    if(!ObjectId.isValid(id)){
+      return res.status(404).json({ error: "Invalid post ID format" });
+      }
+      
+    const postId = new ObjectId(id);
+    const updatedData = req.body;
     let db = await connect();
+    let post = await db.collection("posts").findOne({ _id: post._id });
+
+    if(!post){
+      return res.status(404).json({ error: "Post not found" });
+    }
+    // Check if auth user is post owner
+    if(post.userid !== userId){
+      return res.status(403).json({ error: "Unauthorized access" });
+    }
+    
     let result = await db.collection("posts").updateOne(
-      { _id: mongo.ObjectId(id) },
+      { _id: post._id },
       { $set: updatedData }
     );
+
+    if(result.matchedCount === 0){
+      return res.status(404).json({ error: "Post not found" });
+    }
 
     res.json({ success: true, message: "Salon details updated successfully" });
   } catch (err) {
