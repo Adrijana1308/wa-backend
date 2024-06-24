@@ -173,34 +173,23 @@ async function checkAvailability(selectedDate, selectedTime){
 // Endpoint for updating salon details
 app.put("/posts/:id", auth.verify, async (req, res) => {
   try {
-    const { id } = req.params;
-    const {userId} = req.jwt;
+    const PostId = req.params.id;
+    const postData = req.body;
+    const userId = req.jwt;
     
-    if(!ObjectId.isValid(id)){
-      return res.status(404).json({ error: "Invalid post ID format" });
+    let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId});
+
+    if(post.userId !== userId){
+      return res.status(403).send({ error: "Zabranjeno!" });
       }
       
-    const postId = new ObjectId(id);
-    const updatedData = req.body;
     let db = await connect();
-    let post = await db.collection("posts").findOne({ _id: post._id });
-
-    if(!post){
-      return res.status(404).json({ error: "Post not found" });
-    }
-    // Check if auth user is post owner
-    if(post.userid !== userId){
-      return res.status(403).json({ error: "Unauthorized access" });
-    }
-    
     let result = await db.collection("posts").updateOne(
-      { _id: post._id },
-      { $set: updatedData }
+      { _id: new mongo.ObjectId(PostId) }, // mozda je greska tu
+      { $set: postData }
     );
 
-    if(result.matchedCount === 0){
-      return res.status(404).json({ error: "Post not found" });
-    }
+    console.log("Update result: ", result); // debug line
 
     res.json({ success: true, message: "Salon details updated successfully" });
   } catch (err) {
@@ -224,13 +213,22 @@ app.get("/posts",  async (req, res) => {
 
 // Enpoint for specific Salon post / donwload
 app.get("/posts/:id", async (req, res) => {
-  const { id } = req.params;
+  const { _id } = req.body;
+
   const db = await connect();
-  const post = await db
-    .collection("posts")
-    .findOne({ _id: mongo.ObjectId(id) });
+  try{
+  const post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(_id) });
   console.log("Post: " + post);
+
+  if(!post) {
+    return res.status(404).json({ error: "Post not found", post });
+  }
+
   res.json(post);
+  } catch (err){
+    console.error("Error fetching post: ", err);
+    res.status(500).json({ error: "Error u dohvatu posta!! app.get" });
+  }
 });
 
 // Endpoint for deleting specific Salon post
