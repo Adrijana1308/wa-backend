@@ -156,13 +156,14 @@ app.post("/posts", async (req, res) => {
 });
 
 // Async funtion to check if the selected date and time are available
-async function checkAvailability(selectedDate, selectedTime){
+async function checkAvailability(selectedDate, selectedTime, salonId){
+  let db = await connect();
   try {
-    const existingAppointments = await db.collection("appointments").find({
-      date: selectedDate,
-      time: selectedTime
-    }).toArray();
-    return existingAppointments.length === 0;
+    const existingAppointments = await db.collection("posts").findOne({
+      _id: mongo.ObjectId(salonId),
+      appointments: { $elemMatch: { date: selectedDate, time: selectedTime } }
+    });
+    return !existingAppointments;
   } catch (error) {
     console.error("Error checking availability: ", error);
     throw error;
@@ -225,35 +226,40 @@ app.delete("/posts/:id", async (req, res) => {
 //Enpoint for making bookings
 app.post("/bookings", async (req, res) => {
   try {
-    const { date, time, salon_id } = req.body;
+    const { date, time, salon_id, hairstyle } = req.body;
     const db = await connect();
-    const result = await db.collection("posts").insertOne({
-      date,
-      time,
-      salon_id,
-    });
-    res.json(result.ops[0]);
+
+    //Check availability
+    const isAvailable = await checkAvailability(date, time, salon_id);
+    if(!isAvailable){
+      return res.status(400).json({error: "Termin je zauzet!"}); //400 Bad Request
+    }
+
+    //Make appointment
+    const result = await db.collection("posts").updateOne(
+    { _id: mongo.ObjectId(salon_id) },
+    { $push: { appointments: { date, time, hairstyle } } }
+    );
+    res.json({success: true, message: "Appointment booked succssfully!"});
   } catch (err) {
     console.error("Error making appointment: ", err);
     res.status(500).json({ error: "Server error" });
   }
 })
 
-// app.post("/appointments", async (req, res) => {
-//   try {
-//     const { date, time, salon_id } = req.body;
-//     const db = await connect();
-//     const result = await db.collection("posts.appointments").updateOne({
-//       "salon_id":salon_id,
-//       "date":date,
-//       "time":time,
-
-//     });
-//     res.json(result.ops[0]);
-//   } catch (err) {
-//     console.error("Error making appointment: ", err);
-//     res.status(500).json({ error: "Server error" });
-//   }
-// })
+app.get("/bookings/:salon_id", async (req, res) => {
+  const { salon_id } = req.params;
+  const db = await connect();
+  try {
+    const post = await db.collection("posts").findOne(
+      {_id: mongo.ObjectId(salon_id) },
+      { projection: {appointments: 1 } } // Only return the appointments field , _id: 0
+    );
+    res.json(post.appointments);
+   } catch (error) {
+      console.error("Error fetching appointments: ", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
 app.listen(port, () => console.log(`Slušam na portu ${port}!`));
