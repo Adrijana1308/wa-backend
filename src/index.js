@@ -226,7 +226,7 @@ app.delete("/posts/:id", async (req, res) => {
 //Enpoint for making bookings
 app.post("/bookings", async (req, res) => {
   try {
-    const { date, time, salon_id, hairstyle } = req.body;
+    const { date, time, salon_id, description } = req.body;
     const db = await connect();
 
     //Check availability
@@ -238,7 +238,7 @@ app.post("/bookings", async (req, res) => {
     //Make appointment
     const result = await db.collection("posts").updateOne(
     { _id: mongo.ObjectId(salon_id) },
-    { $push: { appointments: { date, time, hairstyle } } }
+    { $push: { appointments: { date, time, description } } }
     );
     res.json({success: true, message: "Appointment booked succssfully!"});
   } catch (err) {
@@ -246,6 +246,24 @@ app.post("/bookings", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 })
+
+app.get("/bookings", async (req, res) => {
+  const db = await connect();
+  try {
+    const posts = await db.collection("posts").find({}, { projection: { appointments: 1 } }).toArray();
+    const bookings = posts.flatMap(post => 
+      (post.appointments || []).map(appointment => ({
+      title: appointment.description || "Booking",
+      start: new Date(`${appointment.date}T${appointment.time}`),
+      salon_id: post._id
+    })));
+    res.json(bookings);
+  } catch (error) {
+    console.error("Error fetching all appointments: ", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 app.get("/bookings/:salon_id", async (req, res) => {
   const { salon_id } = req.params;
