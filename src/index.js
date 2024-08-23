@@ -177,13 +177,13 @@ app.put("/posts/:id", auth.verify, async (req, res) => {
     const postData = req.body;
     const userId = req.jwt;
     
+    let db = await connect();
     let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId});
 
     if(post.userId !== userId){
       return res.status(403).send({ error: "Zabranjeno!" });
       }
       
-    let db = await connect();
     let result = await db.collection("posts").updateOne(
       { _id: new mongo.ObjectId(PostId) }, // mozda je greska tu
       { $set: postData }
@@ -213,11 +213,11 @@ app.get("/posts",  async (req, res) => {
 
 // Enpoint for specific Salon post / donwload
 app.get("/posts/:id", async (req, res) => {
-  const { _id } = req.body;
+  const { id } = req.params;
 
   const db = await connect();
   try{
-  const post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(_id) });
+  const post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(id) });
   console.log("Post: " + post);
 
   if(!post) {
@@ -241,15 +241,28 @@ app.delete("/posts/:id", async (req, res) => {
   res.json({ success: true, message: "Post deleted successfully" });
 });
 
+//Endpoint for getting bookings
+app.get("/bookings", async (req, res) => {
+  try {
+    let db = await connect();
+    let bookings = await db.collection("bookings").find().toArray();
+    res.json(bookings);
+  } catch (err) {
+    console.error("Error fetching bookings: ", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 //Enpoint for making bookings
 app.post("/bookings", async (req, res) => {
   try {
-    const { date, time, salon_id } = req.body;
+    const { date, time, _id } = req.body;
     const db = await connect();
     const result = await db.collection("posts").insertOne({
       date,
       time,
-      salon_id,
+      _id,
     });
     res.json(result.ops[0]);
   } catch (err) {
