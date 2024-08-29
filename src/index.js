@@ -78,8 +78,27 @@ app.post("/register", async (req, res) => {
 });
 
 // Endpoint for Salon posts / upload
-app.post("/posts", async (req, res) => {
+app.post("/posts", (req, res, next) =>{
+  console.log("Headers recived:", req.headers);
+  next();
+}, auth.verify, async (req, res) => {
   try {
+    const userId = req.jwt._id;
+
+    console.log("User ID from JWT:", userId);
+
+    if(!userId){
+      return res.status(400).json({error: "User ID is missing or invalid."});
+    }
+
+    let userObjectId;
+    try {
+      userObjectId = new mongo.ObjectId(userId);
+    } catch (error) {
+      console.error("Invalid User ID format:", error);
+      return res.status(400).json({ error: "Invalid User ID format." });
+    }
+
     //Validiraj dolazne podatke
     const {name, location, open, close, source, hairstyles: incomingHairstyles} = req.body;
     const {date, time} = req.body.availability || {};
@@ -133,6 +152,7 @@ app.post("/posts", async (req, res) => {
 
     let db = await connect();
     let result = await db.collection("posts").insertOne({
+      userId: userObjectId,
       name,
       location,
       date,
@@ -175,14 +195,25 @@ app.put("/posts/:id", auth.verify, async (req, res) => {
   try {
     const PostId = req.params.id;
     const postData = req.body;
-    const userId = req.jwt;
+    const userId = req.jwt._id;
     
     let db = await connect();
-    let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId});
+    let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(PostId)});
 
-    if(post.userId !== userId){
+    if(!post){
+      return res.status(404).send({error: "Post not found!"});
+    }
+
+    // Log both userId values for debugging
+    console.log("Post userId:", String(post.userId));
+    console.log("Authenticated userId:", String(userId));
+
+    if(String(post.userId) !== String(userId)){
       return res.status(403).send({ error: "Zabranjeno!" });
       }
+
+    // Delete _id field from postData if it exists
+    delete postData._id;
       
     let result = await db.collection("posts").updateOne(
       { _id: new mongo.ObjectId(PostId) }, // mozda je greska tu
@@ -287,5 +318,11 @@ app.post("/bookings", async (req, res) => {
 //     res.status(500).json({ error: "Server error" });
 //   }
 // })
+
+
+app.get("/test-auth", auth.verify, (req, res) => {
+  console.log("JWT Data:", req.jwt);
+  res.send({ message: "Authentication successful", data: req.jwt });
+});
 
 app.listen(port, () => console.log(`Slušam na portu ${port}!`));
