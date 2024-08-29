@@ -6,6 +6,7 @@ import cors from "cors";
 import connect from "./db.js";
 import mongo from "mongodb";
 import auth from "./auth.js";
+import { ObjectId } from "mongodb";
 
 //import * as res from 'express/lib/response';
 
@@ -77,8 +78,27 @@ app.post("/register", async (req, res) => {
 });
 
 // Endpoint for Salon posts / upload
-app.post("/posts", async (req, res) => {
+app.post("/posts", (req, res, next) =>{
+  console.log("Headers recived:", req.headers);
+  next();
+}, auth.verify, async (req, res) => {
   try {
+    const userId = req.jwt._id;
+
+    console.log("User ID from JWT:", userId);
+
+    if(!userId){
+      return res.status(400).json({error: "User ID is missing or invalid."});
+    }
+
+    let userObjectId;
+    try {
+      userObjectId = new mongo.ObjectId(userId);
+    } catch (error) {
+      console.error("Invalid User ID format:", error);
+      return res.status(400).json({ error: "Invalid User ID format." });
+    }
+
     //Validiraj dolazne podatke
     const {name, location, open, close, source, hairstyles: incomingHairstyles} = req.body;
     const {date, time} = req.body.availability || {};
@@ -132,6 +152,7 @@ app.post("/posts", async (req, res) => {
 
     let db = await connect();
     let result = await db.collection("posts").insertOne({
+      userId: userObjectId,
       name,
       location,
       date,
@@ -170,16 +191,36 @@ async function checkAvailability(selectedDate, selectedTime){
 }
 
 // Endpoint for updating salon details
-app.put("/posts/:id", async (req, res) => {
+app.put("/posts/:id", auth.verify, async (req, res) => {
   try {
-    const { id } = req.params;
-    const updatedData = req.body;
+    const PostId = req.params.id;
+    const postData = req.body;
+    const userId = req.jwt._id;
     
     let db = await connect();
+    let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(PostId)});
+
+    if(!post){
+      return res.status(404).send({error: "Post not found!"});
+    }
+
+    // Log both userId values for debugging
+    console.log("Post userId:", String(post.userId));
+    console.log("Authenticated userId:", String(userId));
+
+    if(String(post.userId) !== String(userId)){
+      return res.status(403).send({ error: "Zabranjeno!" });
+      }
+
+    // Delete _id field from postData if it exists
+    delete postData._id;
+      
     let result = await db.collection("posts").updateOne(
-      { _id: mongo.ObjectId(id) },
-      { $set: updatedData }
+      { _id: new mongo.ObjectId(PostId) }, // mozda je greska tu
+      { $set: postData }
     );
+
+    console.log("Update result: ", result); // debug line
 
     res.json({ success: true, message: "Salon details updated successfully" });
   } catch (err) {
@@ -204,12 +245,21 @@ app.get("/posts",  async (req, res) => {
 // Enpoint for specific Salon post / donwload
 app.get("/posts/:id", async (req, res) => {
   const { id } = req.params;
+
   const db = await connect();
-  const post = await db
-    .collection("posts")
-    .findOne({ _id: mongo.ObjectId(id) });
+  try{
+  const post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(id) });
   console.log("Post: " + post);
+
+  if(!post) {
+    return res.status(404).json({ error: "Post not found", post });
+  }
+
   res.json(post);
+  } catch (err){
+    console.error("Error fetching post: ", err);
+    res.status(500).json({ error: "Error u dohvatu posta!! app.get" });
+  }
 });
 
 // Endpoint for deleting specific Salon post
@@ -222,15 +272,28 @@ app.delete("/posts/:id", async (req, res) => {
   res.json({ success: true, message: "Post deleted successfully" });
 });
 
+//Endpoint for getting bookings
+app.get("/bookings", async (req, res) => {
+  try {
+    let db = await connect();
+    let bookings = await db.collection("bookings").find().toArray();
+    res.json(bookings);
+  } catch (err) {
+    console.error("Error fetching bookings: ", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 //Enpoint for making bookings
 app.post("/bookings", async (req, res) => {
   try {
-    const { date, time, salon_id } = req.body;
+    const { date, time, _id } = req.body;
     const db = await connect();
     const result = await db.collection("posts").insertOne({
       date,
       time,
-      salon_id,
+      _id,
     });
     res.json(result.ops[0]);
   } catch (err) {
@@ -255,5 +318,11 @@ app.post("/bookings", async (req, res) => {
 //     res.status(500).json({ error: "Server error" });
 //   }
 // })
+
+
+app.get("/test-auth", auth.verify, (req, res) => {
+  console.log("JWT Data:", req.jwt);
+  res.send({ message: "Authentication successful", data: req.jwt });
+});
 
 app.listen(port, () => console.log(`Slušam na portu ${port}!`));

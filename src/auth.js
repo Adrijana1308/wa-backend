@@ -46,16 +46,26 @@ export default {
 
         if(user && user.password && (await bcrypt.compare (password, user.password))){
             delete user.password;
-            let token = jwt.sign( user, process.env.JWT_SECRET, {
-                algorithm : "HS512",
-                expiresIn: "1 week"
-            }); 
-            return{
-                token,
-                username: user.username,
-                userType: user.userType,
-                grad: user.grad
-            };
+            let token = jwt.sign(
+                {
+                    _id: user._id,
+                    username: user.username,
+                    userType: user.userType,
+                    grad: user.grad
+                },
+                process.env.JWT_SECRET, 
+                {
+                    algorithm : "HS512",
+                    expiresIn: "1 week"
+                }
+            ); 
+                return{
+                    token,
+                    username: user.username,
+                    userType: user.userType,
+                    grad: user.grad,
+                    _id: user._id
+                };
         }
         else {
             throw new Error('Invalid username or password');
@@ -63,18 +73,29 @@ export default {
     },
     verify(req, res, next){
         try{
-            let authorization = req.headers.authorization.split(' ');
-            let type = authorization[0];
-            let token = authorization[1];
+            const authorization = req.headers.authorization;
+            // Check if the Authorization header is present
+            if(!authorization){
+                return res.status(401).json({error: 'Authorization header missing'});
+            }
+
+            // Split the Authorization header into "Bearer" and the token
+            const [type, token] = authorization.split(' ');
+
+            //let authorization = req.headers.authorization.split(' ');
+            //let type = authorization[0];
+            //let token = authorization[1];
             
             if(type !== 'Bearer'){
-                return res.status(401).send();
+                return res.status(401).json({error: 'Invalid token type!'});
             }
             else{
                 req.jwt = jwt.verify(token, process.env.JWT_SECRET);
+                console.log("JWT Decoded successfully: ", req.jwt);
                 return next();
             }
         } catch (error){
+            console.error("JWT verification failed: ", error);
             return res.status(401).send({error: 'Unauthorized'});
         }
     }
