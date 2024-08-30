@@ -78,10 +78,7 @@ app.post("/register", async (req, res) => {
 });
 
 // Endpoint for Salon posts / upload
-app.post("/posts", (req, res, next) =>{
-  console.log("Headers recived:", req.headers);
-  next();
-}, auth.verify, async (req, res) => {
+app.post("/posts", auth.verify, async (req, res) => {
   try {
     const userId = req.jwt._id;
 
@@ -196,6 +193,7 @@ app.put("/posts/:id", auth.verify, async (req, res) => {
     const PostId = req.params.id;
     const postData = req.body;
     const userId = req.jwt._id;
+    const userRole = req.jwt.role;
     
     let db = await connect();
     let post = await db.collection("posts").findOne({ _id: new mongo.ObjectId(PostId)});
@@ -203,12 +201,9 @@ app.put("/posts/:id", auth.verify, async (req, res) => {
     if(!post){
       return res.status(404).send({error: "Post not found!"});
     }
-
-    // Log both userId values for debugging
-    console.log("Post userId:", String(post.userId));
-    console.log("Authenticated userId:", String(userId));
-
-    if(String(post.userId) !== String(userId)){
+    // Allow superadmin to bypass ownership check
+    // Specific Post ownership check
+    if(userRole !== "superadmin" && String(post.userId) !== String(userId)){
       return res.status(403).send({ error: "Zabranjeno!" });
       }
 

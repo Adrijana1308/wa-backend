@@ -24,6 +24,7 @@ export default {
             password: await bcrypt.hash(userData.password, 10),
             userType: userData.userType, // Add usertype to the schema
             grad: userData.grad,
+            role: userData.role || 'user', // Default role
         };
         try {
             let result = await db.collection('users').insert(doc);
@@ -51,7 +52,8 @@ export default {
                     _id: user._id,
                     username: user.username,
                     userType: user.userType,
-                    grad: user.grad
+                    grad: user.grad,
+                    role: user.role || 'user',
                 },
                 process.env.JWT_SECRET, 
                 {
@@ -64,6 +66,7 @@ export default {
                     username: user.username,
                     userType: user.userType,
                     grad: user.grad,
+                    role: user.role || 'user',
                     _id: user._id
                 };
         }
@@ -89,11 +92,18 @@ export default {
             if(type !== 'Bearer'){
                 return res.status(401).json({error: 'Invalid token type!'});
             }
-            else{
-                req.jwt = jwt.verify(token, process.env.JWT_SECRET);
-                console.log("JWT Decoded successfully: ", req.jwt);
-                return next();
+            
+            req.jwt = jwt.verify(token, process.env.JWT_SECRET);
+            console.log("JWT Decoded successfully: ", req.jwt);
+
+            // Super admin check
+            if (req.jwt.userType === 'superadmin'){
+                req.isSuperAdmin = true;
+            } else {
+                req.isSuperAdmin = false;
             }
+            return next();
+
         } catch (error){
             console.error("JWT verification failed: ", error);
             return res.status(401).send({error: 'Unauthorized'});
