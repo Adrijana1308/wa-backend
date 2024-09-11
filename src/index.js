@@ -292,13 +292,47 @@ app.get("/posts/:id", async (req, res) => {
 });
 
 // Endpoint for deleting specific Salon post
-app.delete("/posts/:id", async (req, res) => {
-  const { id } = req.params;
-  const db = await connect();
-  const result = await db
-    .collection("posts")
-    .deleteOne({ _id: mongo.ObjectId(id) });
-  res.json({ success: true, message: "Post deleted successfully" });
+app.delete("/posts/:id", auth.verify, async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const userId = req.jwt._id;
+    const userRole = req.jwt.role;
+
+    if (!mongo.ObjectId.isValid(postId)) {
+      return res.status(400).json({ error: "Invalid post ID format" });
+    }
+
+    let db = await connect();
+    const post = await db
+      .collection("posts")
+      .findOne({ _id: new mongo.ObjectId(postId) });
+
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Allow the post owner or a superadmin to delete
+    if (String(post.userId) !== String(userId) && userRole !== "superadmin") {
+      return res
+        .status(403)
+        .json({ error: "Unauthorized: You cannot delete this post." });
+    }
+
+    const result = await db
+      .collection("posts")
+      .deleteOne({ _id: new mongo.ObjectId(postId) });
+
+    if (result.deletedCount === 1) {
+      return res.json({ success: true, message: "Post deleted successfully" });
+    } else {
+      return res
+        .status(404)
+        .json({ error: "Post not found or already deleted" });
+    }
+  } catch (err) {
+    console.error("Error deleting post:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 //Endpoint for getting bookings
@@ -391,7 +425,7 @@ app.post("/bookings", async (req, res) => {
       from: process.env.EMAIL_USER,
       to: user.username,
       subject: `Your appointment with ${salon.name} is confirmed`,
-      test: `Dear Customer, \n\nYour appointment for ${service} at ${salon.name} is confiremd! \n\nDate: ${date}\nTime: ${startTime} - ${endTime}\n\nThank you for choosing us!`,
+      text: `Dear Customer, \n\nYour appointment for ${service} at ${salon.name} is confiremd! \n\nDate: ${date}\nTime: ${startTime} - ${endTime}\n\nThank you for choosing us!`,
     };
 
     const ownerMailOptions = {
@@ -468,6 +502,76 @@ app.delete("/bookings/:id", auth.verify, async (req, res) => {
     }
   } catch (err) {
     console.error("Error canceling booking:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Endpoint to rate a post
+app.post("/posts/:id/rate", auth.verify, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { rating } = req.body;
+
+    // Ensure rating is a number, in case it was passed as a string
+    rating = Number(rating);
+
+    // Validate the rating
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5." });
+    }
+
+    const db = await connect();
+    const post = await db
+      .collection("posts")
+      .findOne({ _id: new mongo.ObjectId(id) });
+
+    if (!post) {
+      return res.status(404).json({ error: "Post not found." });
+    }
+
+    // Ensure the rating and number of ratings are initialized
+    const currentRating = post.rating || 0; // Default to 0 if null
+    const currentNumOfRatings = post.numOfRatings || 0; // Default to 0 if null
+
+    // Log the current state
+    console.log(`Current Rating: ${currentRating}`);
+    console.log(`Current Number of Ratings: ${currentNumOfRatings}`);
+    console.log(`Incoming Rating: ${rating}`);
+
+    // Calculate the total sum of previous ratings
+    const totalRatingSum = currentRating * currentNumOfRatings;
+    console.log(`Total Rating Sum (before adding new): ${totalRatingSum}`);
+
+    // Add the new rating to the total rating sum
+    const newTotalRatingSum = totalRatingSum + rating;
+    console.log(`New Total Rating Sum: ${newTotalRatingSum}`);
+
+    // Calculate the new number of ratings
+    const newNumOfRatings = currentNumOfRatings + 1;
+    console.log(`New Number of Ratings: ${newNumOfRatings}`);
+
+    // Calculate the updated average rating
+    const updatedRating = newTotalRatingSum / newNumOfRatings;
+    console.log(
+      `Updated Rating Calculation: (${newTotalRatingSum}) / ${newNumOfRatings}`
+    );
+    console.log(`Updated Rating: ${updatedRating}`);
+
+    // Update the post with the new rating and number of ratings
+    await db
+      .collection("posts")
+      .updateOne(
+        { _id: new mongo.ObjectId(id) },
+        { $set: { rating: updatedRating, numOfRatings: newNumOfRatings } }
+      );
+
+    res.json({
+      success: true,
+      rating: updatedRating,
+      numOfRatings: newNumOfRatings,
+    });
+  } catch (err) {
+    console.error("Error rating post: ", err);
     res.status(500).json({ error: "Server error" });
   }
 });
