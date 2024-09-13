@@ -73,9 +73,7 @@ function asyncHandler(fn) {
 }
 
 // Endpoint for user Registration
-app.post(
-  "/register",
-  asyncHandler(async (req, res) => {
+app.post("/register",asyncHandler(async (req, res) => {
     console.log("Received User Data:", req.body);
 
     let user = req.body;
