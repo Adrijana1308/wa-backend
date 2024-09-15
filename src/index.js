@@ -39,8 +39,8 @@ app.use(function (req, res, next) {
 const transponder = nodemailer.createTransport({
   service: "Gmail",
   auth: {
-    user: process.env.EMAIL_USER, // Your email
-    pass: process.env.EMAIL_PASS, // Your email password or app password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
@@ -49,7 +49,6 @@ function isValidTimeFormat(time) {
   return regex.test(time);
 }
 
-// Ovo je test, to se ne koristi u stvarnosti....
 app.get("/tajna", [auth.verify], (req, res) => {
   res.json({ message: "ovo je tajna " + req.jwt.username });
 });
@@ -72,8 +71,9 @@ function asyncHandler(fn) {
   };
 }
 
-// Endpoint for user Registration
-app.post("/register",asyncHandler(async (req, res) => {
+app.post(
+  "/register",
+  asyncHandler(async (req, res) => {
     console.log("Received User Data:", req.body);
 
     let user = req.body;
@@ -92,7 +92,6 @@ app.post("/register",asyncHandler(async (req, res) => {
   })
 );
 
-// Endpoint for Salon posts / upload
 app.post("/posts", auth.verify, async (req, res) => {
   try {
     const userId = req.jwt._id;
@@ -111,7 +110,6 @@ app.post("/posts", auth.verify, async (req, res) => {
       return res.status(400).json({ error: "Invalid User ID format." });
     }
 
-    //Validiraj dolazne podatke
     const {
       name,
       location,
@@ -125,20 +123,16 @@ app.post("/posts", auth.verify, async (req, res) => {
     const hairType = ["short", "medium", "long", "other"];
 
     const defaultHairstyles = {
-      //Opcionalne defaultne vrijenosti kose
       short: [],
       medium: [],
       long: [],
       other: [],
     };
 
-    const hairstyles = incomingHairstyles || defaultHairstyles; //Ako nema hairstyles, postavi defaultne vrijednosti
+    const hairstyles = incomingHairstyles || defaultHairstyles;
 
-    //Provjera dodavanja tipova frizura i cijena na postu
-    //if(hairstyles){
     for (const type of hairType) {
       if (hairstyles[type]) {
-        //Provjeri dali je tip ispravno formatiran
         if (
           !Array.isArray(hairstyles[type]) ||
           hairstyles[type].some(
@@ -154,7 +148,7 @@ app.post("/posts", auth.verify, async (req, res) => {
     }
     //}
 
-    const mergedHairstyles = { ...defaultHairstyles, ...hairstyles }; //Spoji defaultne vrijednosti i dodane vrijednosti
+    const mergedHairstyles = { ...defaultHairstyles, ...hairstyles };
     //  const selectedDate = date; //Neznam za sad dali mi to treba
     //  const selectedTime = time; //Neznam za sad dali mi to treba
 
@@ -198,7 +192,6 @@ app.post("/posts", auth.verify, async (req, res) => {
   }
 });
 
-// Async funtion to check if the selected date and time are available
 async function checkAvailability(selectedDate, selectedTime) {
   try {
     const existingAppointments = await db
@@ -333,7 +326,6 @@ app.delete("/posts/:id", auth.verify, async (req, res) => {
   }
 });
 
-//Endpoint for getting bookings
 app.get("/bookings", async (req, res) => {
   try {
     const { salonId } = req.query;
@@ -342,13 +334,12 @@ app.get("/bookings", async (req, res) => {
     const query = salonId ? { salonId: new mongo.ObjectId(salonId) } : {};
     let bookings = await db
       .collection("bookings")
-      .find()
-      .sort({ date: 1, startTime: 1 })
+      .find({ salonId: new mongo.ObjectId(salonId) })
       .toArray();
 
     res.json(bookings);
   } catch (err) {
-    console.error("Error fetching bookings: ", err);
+    console.error("Error fetching bookings:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -445,61 +436,55 @@ app.post("/bookings", async (req, res) => {
 });
 
 // Endpoint for canceling a booking
+// Endpoint za brisanje pojedinačne rezervacije (booking)
 app.delete("/bookings/:id", auth.verify, async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.jwt?._id; // Ensure JWT is decoded properly
+    const bookingId = req.params.id;
+    const userId = req.jwt._id;
 
-    if (!id || !mongo.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid or missing booking ID" });
+    if (!mongo.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ error: "Invalid booking ID format" });
     }
 
-    if (!userId || !mongo.ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: "Invalid user ID from JWT" });
-    }
-
-    // Connect to the database
-    const db = await connect();
-
-    // Fetch the booking to check the owner
+    let db = await connect();
     const booking = await db
       .collection("bookings")
-      .findOne({ _id: new mongo.ObjectId(id) });
+      .findOne({ _id: new mongo.ObjectId(bookingId) });
+
     if (!booking) {
       return res.status(404).json({ error: "Booking not found" });
     }
 
-    // Fetch the salon to check the owner
-    const salon = await db
+    // Provjeri je li korisnik vlasnik booking-a ili vlasnik salona
+    const post = await db
       .collection("posts")
       .findOne({ _id: new mongo.ObjectId(booking.salonId) });
-    if (!salon) {
-      return res.status(404).json({ error: "Salon not found" });
-    }
 
-    // Check if the user is the booking owner, the salon owner, or a superadmin
     if (
       String(booking.userId) !== String(userId) &&
-      String(salon.userId) !== String(userId) &&
+      String(post.userId) !== String(userId) &&
       !req.isSuperAdmin
     ) {
       return res
         .status(403)
-        .json({ error: "Unauthorized! You cannot cancel this booking." });
+        .json({ error: "Unauthorized: You cannot delete this booking." });
     }
 
-    // Delete the booking if the user is authorized
+    // Brisanje rezervacije
     const result = await db
       .collection("bookings")
-      .deleteOne({ _id: new mongo.ObjectId(id) });
+      .deleteOne({ _id: new mongo.ObjectId(bookingId) });
 
     if (result.deletedCount === 1) {
-      res.json({ success: true, message: "Booking canceled successfully" });
+      return res.json({
+        success: true,
+        message: "Booking deleted successfully",
+      });
     } else {
-      res.status(404).json({ error: "Booking not found" });
+      return res.status(404).json({ error: "Booking not found" });
     }
   } catch (err) {
-    console.error("Error canceling booking:", err);
+    console.error("Error deleting booking:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
